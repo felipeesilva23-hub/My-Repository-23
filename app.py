@@ -15,40 +15,44 @@ CSS = """
 #MainMenu, footer, header [data-testid="stToolbar"] {visibility:hidden;}
 .block-container {max-width:720px; padding:1.2rem 1rem 3rem;}
 h1 {font-size:1.7rem !important; letter-spacing:-.02em; margin-bottom:.2rem;}
-.sub {color:#64748B; font-size:1.02rem; margin-bottom:1.2rem;}
+.sub {opacity:.7; font-size:1.02rem; margin-bottom:1.2rem;}
 .stButton > button, .stFormSubmitButton > button, .stLinkButton > a {
   width:100%; min-height:3.3rem; border-radius:14px; font-size:1.05rem; font-weight:600;
-  border:1px solid #E2E8F0; background:#fff; color:#0F172A; transition:.15s;}
+  border:1px solid rgba(128,128,128,.35); background:transparent; color:inherit; transition:.15s;}
 .stButton > button:hover, .stLinkButton > a:hover {border-color:#4F46E5; color:#4F46E5;}
 .stButton > button[kind="primary"], .stFormSubmitButton > button[kind="primary"],
 .stFormSubmitButton > button {background:#4F46E5; color:#fff; border:0;}
 .stFormSubmitButton > button:hover {background:#4338CA; color:#fff;}
-[data-testid="stForm"] {border:1px solid #E2E8F0; border-radius:16px; background:#fff; padding:1.1rem;}
+[data-testid="stForm"] {border:1px solid rgba(128,128,128,.35); border-radius:16px; background:transparent; padding:1.1rem;}
 .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {
   border-radius:12px; font-size:1.02rem;}
 pre, code {white-space:pre-wrap !important; word-break:break-word;}
-.card {border:1px solid #E2E8F0; background:#fff; border-radius:16px; padding:1rem 1.1rem; margin:.6rem 0 .2rem;}
+.card {border:1px solid rgba(128,128,128,.35); background:transparent; border-radius:16px; padding:1rem 1.1rem; margin:.6rem 0 .2rem;}
 .card b {font-size:1.02rem;}
-.diag {background:#EEF2FF; border-radius:12px; padding:.8rem 1rem; color:#3730A3; margin:.6rem 0;}
+.diag {background:rgba(79,70,229,.15); border-radius:12px; padding:.8rem 1rem; color:inherit; margin:.6rem 0;}
 @media (max-width:640px){ h1{font-size:1.45rem !important;} .block-container{padding:.8rem .8rem 3rem;} }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
 # ---------- IA ----------
-def chave():
+def chave_servidor():
     try:
         k = st.secrets.get("GEMINI_API_KEY", "")
     except Exception:
         k = ""
-    return k or os.getenv("GEMINI_API_KEY", "") or st.session_state.get("chave", "")
+    return k or os.getenv("GEMINI_API_KEY", "")
+
+
+def chave():
+    return chave_servidor() or st.session_state.get("_chave", "")
 
 
 def chamar_ia(sistema, usuario, como_json=False):
     """Retorna (texto, erro). Nunca levanta exceção para a tela."""
     k = chave()
     if not k:
-        return None, "Falta a chave. Toque em «Configurar chave» na tela inicial."
+        return None, "Falta a chave. Salve sua chave no quadro acima."
     try:
         from google import genai
         from google.genai import types
@@ -68,7 +72,8 @@ def chamar_ia(sistema, usuario, como_json=False):
             return None, "Limite de uso atingido. Espere um minuto e tente de novo."
         if "404" in m or "not found" in m:
             return None, f"Modelo «{MODELO}» indisponível. Defina GEMINI_MODEL com um modelo atual."
-        return None, "Não deu certo agora. Tente de novo em instantes."
+        det = str(e).replace(k, "***")[:300]
+        return None, f"Não deu certo agora. Tente de novo em instantes.\n\nDetalhe técnico: {type(e).__name__}: {det}"
 
 
 def ler_json(txt):
@@ -137,6 +142,30 @@ def topo(titulo, sub):
         st.rerun()
     st.markdown(f"# {titulo}")
     st.markdown(f"<div class='sub'>{sub}</div>", unsafe_allow_html=True)
+    caixa_chave()
+
+
+def caixa_chave():
+    """Guarda a chave em st.session_state['_chave'] (não preso a um widget, então
+    não some ao trocar de tela). Dura até o fim da sessão do navegador."""
+    if chave_servidor():
+        return  # chave do dono do app: o usuário não vê nem digita nada
+    if chave():
+        with st.expander("🔑 Chave salva nesta sessão"):
+            if st.button("Remover chave", key="rm_chave"):
+                st.session_state.pop("_chave", None)
+                st.rerun()
+        return
+    with st.form("form_chave"):
+        st.markdown("**🔑 Cole sua chave do Gemini (1 vez)**")
+        st.caption("Grátis em aistudio.google.com/apikey. Fica salva até você fechar o site.")
+        nova = st.text_input("Chave", type="password", label_visibility="collapsed")
+        if st.form_submit_button("Salvar chave", type="primary"):
+            if nova.strip():
+                st.session_state["_chave"] = nova.strip()
+                st.rerun()
+            else:
+                st.error("Cole a chave antes de salvar.")
 
 
 def home():
@@ -151,13 +180,7 @@ def home():
     ]
     for k, nome in itens:
         st.button(nome, key=f"b_{k}", on_click=ir, args=(k,))
-    if not chave():
-        with st.expander("🔑 Configurar chave (1 vez)", expanded=True):
-            st.caption("Chave gratuita em aistudio.google.com/apikey. Fica só nesta sessão.")
-            st.text_input("Cole sua chave", type="password", key="chave")
-    else:
-        with st.expander("🔑 Trocar chave"):
-            st.text_input("Cole sua chave", type="password", key="chave")
+    caixa_chave()
 
 
 def mostrar_x1():
