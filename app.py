@@ -62,7 +62,8 @@ def chamar_ia(sistema, usuario, como_json=False):
             temperature=0.8,
             response_mime_type="application/json" if como_json else "text/plain",
         )
-        r = genai.Client(api_key=k).models.generate_content(model=MODELO, contents=usuario, config=cfg)
+        cliente = genai.Client(api_key=k)
+r = cliente.models.generate_content(model=MODELO, contents=usuario, config=cfg)
         return (r.text or "").strip(), None
     except Exception as e:  # mostra erro amigável
         m = str(e).lower()
